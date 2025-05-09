@@ -1,0 +1,38 @@
+modules = ["java-graalvm22.3", "web"]
+
+[nix]
+channel = "stable-24_05"
+
+[workflows]
+runButton = "Run Main"
+
+[[workflows.workflow]]
+name = "Run Spring Boot"
+author = 41433531
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "mvn spring-boot:run"
+
+[[workflows.workflow]]
+name = "Run Main"
+author = 41433531
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "mvn compile exec:java -Dexec.mainClass=\"org.example.Main\""
+
+[[workflows.workflow]]
+name = "Run SecondMain"
+author = 41433531
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "mvn compile exec:java -Dexec.mainClass=\"org.example.SecondMain\""
+
+[[ports]]
+localPort = 8080
+externalPort = 8080

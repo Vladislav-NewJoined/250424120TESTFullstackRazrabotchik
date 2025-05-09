@@ -1,0 +1,221 @@
+Анализ проблемы с отображением "forward:/index.html" вместо списка
+Я проанализировал ваш проект из репозитория https://github.com/Vladislav-NewJoined/250424120TESTFullstackRazrabotchik3.git и нашел причину, почему вместо списка отображается сообщение "forward:/index.html".
+
+Причина проблемы
+Основная проблема находится в классе MainController. Давайте рассмотрим его код:
+
+package com.example.demo.controller;
+
+import com.example.demo.model.Person;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Controller
+public class MainController {
+
+    @GetMapping("/")
+    public String index(Model model) {
+        List<Person> people = new ArrayList<>();
+        people.add(new Person("Tom", 30));
+        people.add(new Person("Bob", 25));
+        people.add(new Person("Bill", 65));
+        model.addAttribute("people", people);
+        return "index";
+    }
+}
+
+MainController.java
+Проблема в том, что метод index() возвращает строку "index", что в Spring MVC означает, что контроллер должен перенаправить запрос на шаблон с именем "index". Однако:
+
+В вашем проекте не настроен шаблонизатор (Thymeleaf, FreeMarker и т.д.)
+Нет соответствующего шаблона "index.html" в правильной директории
+Когда Spring MVC не может найти шаблон, он пытается перенаправить на статический ресурс "/index.html", и в результате вы видите строку "forward:/index.html" вместо ожидаемого списка.
+
+Решение проблемы
+Есть два основных способа решить эту проблему:
+
+Способ 1: Настроить шаблонизатор и создать шаблон
+Добавьте зависимость Thymeleaf в ваш pom.xml:
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-thymeleaf</artifactId>
+</dependency>
+
+pom.xml
+Создайте шаблон в директории src/main/resources/templates/index.html:
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Список людей</title>
+</head>
+<body>
+    <h1>Список людей</h1>
+    <ul>
+        <li th:each="person : ${people}" th:text="${person.name + ', ' + person.age}"></li>
+    </ul>
+</body>
+</html>
+
+index.html
+Способ 2: Изменить контроллер для возврата данных в формате JSON
+Измените контроллер, чтобы он возвращал данные в формате JSON:
+
+package com.example.demo.controller;
+
+import com.example.demo.model.Person;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@RestController  // Изменено с @Controller на @RestController
+public class MainController {
+
+    @GetMapping("/")
+    public List<Person> index() {  // Убрали параметр Model
+        List<Person> people = new ArrayList<>();
+        people.add(new Person("Tom", 30));
+        people.add(new Person("Bob", 25));
+        people.add(new Person("Bill", 65));
+        return people;  // Возвращаем список напрямую
+    }
+}
+
+MainController.java
+В этом случае Spring автоматически преобразует список объектов в JSON и отправит его клиенту.
+
+Заключение
+Проблема в том, что контроллер настроен на работу с шаблонизатором, но шаблонизатор не настроен и шаблоны отсутствуют. Поэтому вместо списка вы видите сообщение о перенаправлении.
+
+Выберите один из предложенных способов решения в зависимости от того, что вам нужно: отображение HTML-страницы с данными или просто возврат данных в формате JSON.
+
+Ты учёл моё намерение, чтобы список не отправлялся клиенту, а отображался на порту 8080?
+
+
+Context
+— none fetched
+Уточнение решения для отображения списка на порту 8080
+Да, я понимаю ваше намерение - вы хотите, чтобы список отображался непосредственно в браузере при обращении к порту 8080, а не просто отправлялся клиенту в виде JSON.
+
+В этом случае первый вариант решения (с использованием шаблонизатора) больше соответствует вашим требованиям. Давайте подробнее рассмотрим, как это реализовать:
+
+Решение с использованием Thymeleaf
+Добавьте зависимость Thymeleaf в ваш pom.xml:
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-thymeleaf</artifactId>
+</dependency>
+
+pom.xml
+Создайте шаблон в директории src/main/resources/templates/index.html:
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Список людей</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>Список людей</h1>
+    <ul>
+        <li th:each="person : ${people}" th:text="${person.name + ', ' + person.age}"></li>
+    </ul>
+</body>
+</html>
+
+index.html
+Оставьте контроллер без изменений:
+package com.example.demo.controller;
+
+import com.example.demo.model.Person;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.GetMapping;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Controller
+public class MainController {
+
+    @GetMapping("/")
+    public String index(Model model) {
+        List<Person> people = new ArrayList<>();
+        people.add(new Person("Tom", 30));
+        people.add(new Person("Bob", 25));
+        people.add(new Person("Bill", 65));
+        model.addAttribute("people", people);
+        return "index";
+    }
+}
+
+MainController.java
+После этих изменений, когда вы обратитесь к http://localhost:8080/, Spring Boot найдет шаблон index.html, заполнит его данными из модели и отобразит в браузере список людей в виде HTML-страницы.
+
+Альтернативное решение (без Thymeleaf)
+Если вы не хотите использовать Thymeleaf, можно создать статический HTML-файл и использовать JavaScript для загрузки и отображения данных:
+
+Измените контроллер, чтобы он возвращал JSON:
+package com.example.demo.controller;
+
+import com.example.demo.model.Person;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@RestController
+public class MainController {
+
+    @GetMapping("/api/people")
+    public List<Person> getPeople() {
+        List<Person> people = new ArrayList<>();
+        people.add(new Person("Tom", 30));
+        people.add(new Person("Bob", 25));
+        people.add(new Person("Bill", 65));
+        return people;
+    }
+    
+    // Добавляем метод для перенаправления на статический HTML
+    @GetMapping("/")
+    public String index() {
+        return "forward:/index.html";
+    }
+}
+
+MainController.java
+Создайте статический HTML-файл в директории src/main/resources/static/index.html:
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Список людей</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <h1>Список людей</h1>
+    <ul id="peopleList"></ul>
+
+    <script>
+        fetch('/api/people')
+            .then(response => response.json())
+            .then(people => {
+                const list = document.getElementById('peopleList');
+                people.forEach(person => {
+                    const item = document.createElement('li');
+                    item.textContent = `${person.name}, ${person.age}`;
+                    list.appendChild(item);
+                });
+            });
+    </script>
+</body>
+</html>
+
+index.html
+Оба этих решения позволят отображать список людей непосредственно в браузере при обращении к http://localhost:8080/.
+
+Первый вариант (с Thymeleaf) более предпочтителен для серверного рендеринга, а второй вариант использует клиентский JavaScript для получения и отображения данных.

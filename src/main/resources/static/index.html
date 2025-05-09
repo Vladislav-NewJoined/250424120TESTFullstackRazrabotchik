@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>List Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .search-container {
+            margin-bottom: 20px;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            cursor: move;
+            background-color: white;
+        }
+
+        .selected {
+            background-color: #e6f3ff;
+        }
+
+        .item.dragging {
+            opacity: 0.5;
+            background-color: #f9f9f9;
+        }
+
+        .drag-handle {
+            margin-right: 10px;
+            color: #999;
+            cursor: grab;
+        }
+
+        .item-content {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .checkbox {
+            margin-right: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+<h1>List Demo</h1>
+
+<div class="search-container">
+    <input type="text" id="search-input" placeholder="Search items...">
+</div>
+
+<div id="list-container"></div>
+
+<div id="loading" class="loading" style="display: none;">Loading more items...</div>
+
+<script>
+    let currentPage = 0;
+    const pageSize = 20;
+    let isLoading = false;
+    let hasMoreItems = true;
+    let searchTimeout;
+    let searchQuery = '';
+    let itemsOrder = [];
+
+    const container = document.getElementById('list-container');
+    const searchInput = document.getElementById('search-input');
+    const loadingIndicator = document.getElementById('loading');
+
+    // Функция для загрузки элементов
+    async function loadItems(page, append = true) {
+        if (isLoading || (!hasMoreItems && append)) return;
+
+        isLoading = true;
+        loadingIndicator.style.display = 'block';
+
+        try {
+            const url = `/api/items?page=${page}&size=${pageSize}${searchQuery ? `&search=${encodeURIComponent(searchQuery)}` : ''}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            // Проверяем, есть ли в ответе массив items
+            const items = Array.isArray(data) ? data : (data.items || []);
+
+            hasMoreItems = items.length === pageSize;
+
+            if (!append) {
+                container.innerHTML = '';
+                itemsOrder = [];
+            }
+
+            items.forEach(item => {
+                const itemId = item.id;
+                itemsOrder.push(itemId);
+
+                const div = document.createElement('div');
+                div.className = `item ${item.selected ? 'selected' : ''}`;
+                div.setAttribute('data-id', itemId);
+                div.draggable = true;
+
+                div.innerHTML = `
+                    <div class="drag-handle">☰</div>
+                    <div class="item-content">
+                        <input type="checkbox" class="checkbox" ${item.selected ? 'checked' : ''}
+                            onclick="toggleItem(${itemId}, this)">
+                        <span>Item ${itemId}</span>
+                    </div>
+                `;
+
+                // Добавляем обработчики для Drag&Drop
+                div.addEventListener('dragstart', handleDragStart);
+                div.addEventListener('dragover', handleDragOver);
+                div.addEventListener('drop', handleDrop);
+                div.addEventListener('dragend', handleDragEnd);
+
+                container.appendChild(div);
+            });
+        } catch (error) {
+            console.error('Error loading items:', error);
+        } finally {
+            isLoading = false;
+            loadingIndicator.style.display = 'none';
+        }
+    }
+
+    // Функция для переключения выбора элемента
+    async function toggleItem(id, checkbox) {
+        try {
+            await fetch(`/api/items/${id}/toggle`, { method: 'POST' });
+            checkbox.closest('.item').classList.toggle('selected');
+        } catch (error) {
+            console.error('Error toggling item:', error);
+            checkbox.checked = !checkbox.checked; // Возвращаем предыдущее состояние
+        }
+    }
+
+    // Обработчики для Drag&Drop
+    let draggedItem = null;
+
+    function handleDragStart(e) {
+        draggedItem = this;
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.innerHTML);
+    }
+
+    function handleDragOver(e) {
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    }
+
+    function handleDrop(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+
+        if (draggedItem !== this) {
+            // Получаем индексы элементов
+            const allItems = Array.from(container.querySelectorAll('.item'));
+            const fromIndex = allItems.indexOf(draggedItem);
+            const toIndex = allItems.indexOf(this);
+
+            // Перемещаем элемент в DOM
+            if (fromIndex < toIndex) {
+                container.insertBefore(draggedItem, this.nextSibling);
+            } else {
+                container.insertBefore(draggedItem, this);
+            }
+
+            // Обновляем порядок элементов
+            updateItemsOrder();
+        }
+
+        return false;
+    }
+
+    function handleDragEnd() {
+        this.classList.remove('dragging');
+        draggedItem = null;
+    }
+
+    // Функция для обновления порядка элементов на сервере
+    async function updateItemsOrder() {
+        const newOrder = Array.from(container.querySelectorAll('.item'))
+            .map(item => parseInt(item.getAttribute('data-id')));
+
+        try {
+            await fetch('/api/items/reorder', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(newOrder)
+            });
+
+            itemsOrder = newOrder;
+        } catch (error) {
+            console.error('Error updating order:', error);
+        }
+    }
+
+    // Обработчик поиска с debounce
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            searchQuery = this.value.trim();
+            currentPage = 0;
+            loadItems(currentPage, false);
+        }, 300);
+    });
+
+    // Обработчик прокрутки для бесконечной загрузки
+    window.addEventListener('scroll', () => {
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200 && !isLoading && hasMoreItems) {
+            currentPage++;
+            loadItems(currentPage);
+        }
+    });
+
+    // Начальная загрузка
+    loadItems(currentPage);
+</script>
+</body>
+</html>
